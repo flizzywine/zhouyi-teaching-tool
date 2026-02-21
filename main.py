@@ -8,6 +8,7 @@ from gua_data import (
     ALL_GUAS,
     search_gua,
     get_gua_by_index,
+    get_gua_by_numbers,
     binary_to_gua,
     YaoType,
     Yao,
@@ -25,50 +26,55 @@ YAO_TOTAL_WIDTH = 220  # 包含"变"字的总宽度（从140放大到220）
 class YaoLineWidget(ft.Container):
     """爻线组件 - 统一处理阴阳爻的显示"""
 
-    def __init__(self, yao: Yao):
+    def __init__(self, yao: Yao, is_highlighted: bool = False):
         self.yao = yao
+        self.is_highlighted = is_highlighted
 
         super().__init__(
             content=self._create_yao_line(),
             width=YAO_LINE_WIDTH,
-            height=30,  # 固定高度包含padding（从20放大到30）
+            height=30,
             padding=ft.Padding(top=8, bottom=8, left=0, right=0),
             alignment=ft.Alignment(0, 0),
         )
 
     def _create_yao_line(self):
         """创建爻线"""
+        # 高亮样式：红色、加粗
+        color = ft.Colors.RED if self.is_highlighted else ft.Colors.BLACK
+        height = 18 if self.is_highlighted else 14  # 高亮时更粗
+
         if self.yao.is_yang:
-            # 阳爻 —— 一根完整的黑线
+            # 阳爻 —— 一根完整的线
             return ft.Container(
                 width=YAO_LINE_WIDTH,
-                height=14,  # 阳爻线高度（从8放大到14）
-                bgcolor=ft.Colors.BLACK,
-                border_radius=7,
+                height=height,
+                bgcolor=color,
+                border_radius=9 if self.is_highlighted else 7,
             )
         else:
-            # 阴爻 —— 两根比较短的黑线，中间断开
-            gap = 16  # 中间断开部分
-            segment_width = (YAO_LINE_WIDTH - gap) // 2  # 每根短线
+            # 阴爻 —— 两根比较短的线，中间断开
+            gap = 16
+            segment_width = (YAO_LINE_WIDTH - gap) // 2
 
             return ft.Row(
                 [
                     ft.Container(
                         width=segment_width,
-                        height=14,  # 阴爻线高度（从8放大到14）
-                        bgcolor=ft.Colors.BLACK,
-                        border_radius=7,
+                        height=height,
+                        bgcolor=color,
+                        border_radius=9 if self.is_highlighted else 7,
                     ),
                     ft.Container(
                         width=gap,
-                        height=14,
+                        height=height,
                         bgcolor=ft.Colors.TRANSPARENT,
                     ),
                     ft.Container(
                         width=segment_width,
-                        height=14,  # 阴爻线高度（从8放大到14）
-                        bgcolor=ft.Colors.BLACK,
-                        border_radius=7,
+                        height=height,
+                        bgcolor=color,
+                        border_radius=9 if self.is_highlighted else 7,
                     ),
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -85,17 +91,13 @@ class ClickableYaoLine(ft.Container):
         display_yao: Yao,
         on_click=None,
         is_changing: bool = False,
+        is_highlighted: bool = False,
     ):
-        """
-        original_yao: 原始爻（用于点击回调）
-        display_yao: 显示的爻（可能是翻转后的）
-        on_click: 点击回调
-        is_changing: 是否处于变爻状态
-        """
         self.original_yao = original_yao
         self.display_yao = display_yao
         self.on_yao_click = on_click
         self.is_changing = is_changing
+        self.is_highlighted = is_highlighted
 
         super().__init__(
             content=self._create_content(),
@@ -106,19 +108,58 @@ class ClickableYaoLine(ft.Container):
 
     def _create_content(self):
         """创建爻的视觉内容"""
-        # 爻线
-        yao_line = YaoLineWidget(self.display_yao)
+        # 爻线，支持高亮
+        yao_line = YaoLineWidget(self.display_yao, is_highlighted=self.is_highlighted)
 
-        # 创建行，包含爻线和"变"标记（如果需要）
-        if self.is_changing:
+        # 创建行，包含爻线和标记（变/高亮）
+        if self.is_changing and self.is_highlighted:
+            # 同时是变爻和高亮
             return ft.Row(
                 [
                     yao_line,
-                    ft.Container(width=8),  # 间距
+                    ft.Container(width=8),
+                    ft.Container(
+                        content=ft.Text(
+                            "变★",
+                            size=12,
+                            color=ft.Colors.RED,
+                            weight=ft.FontWeight.BOLD,
+                        ),
+                        width=36,
+                        alignment=ft.Alignment(0, 0),
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.START,
+                spacing=0,
+            )
+        elif self.is_changing:
+            return ft.Row(
+                [
+                    yao_line,
+                    ft.Container(width=8),
                     ft.Container(
                         content=ft.Text(
                             "变",
                             size=12,
+                            color=ft.Colors.RED,
+                            weight=ft.FontWeight.BOLD,
+                        ),
+                        width=24,
+                        alignment=ft.Alignment(0, 0),
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.START,
+                spacing=0,
+            )
+        elif self.is_highlighted:
+            return ft.Row(
+                [
+                    yao_line,
+                    ft.Container(width=8),
+                    ft.Container(
+                        content=ft.Text(
+                            "★",
+                            size=14,
                             color=ft.Colors.RED,
                             weight=ft.FontWeight.BOLD,
                         ),
@@ -155,12 +196,16 @@ class InteractiveHexagramView(ft.Column):
         on_yao_click=None,
         title: str = "",
         changing_positions: Optional[List[int]] = None,
+        highlighted_positions: Optional[List[int]] = None,
     ):
-        self.original_gua = original_gua  # 原始卦
+        self.original_gua = original_gua
         self.on_yao_click = on_yao_click
         self.title = title
         self.changing_positions = (
             changing_positions if changing_positions is not None else []
+        )
+        self.highlighted_positions = (
+            highlighted_positions if highlighted_positions is not None else []
         )
 
         # 根据变爻状态确定当前显示的卦
@@ -234,44 +279,64 @@ class InteractiveHexagramView(ft.Column):
             position = display_yao.position
             original_yao = original_yaos_dict[position]
             is_changing = position in self.changing_positions
+            is_highlighted = position in self.highlighted_positions
 
             yao_line = ClickableYaoLine(
                 original_yao=original_yao,
                 display_yao=display_yao,
                 on_click=self.on_yao_click,
                 is_changing=is_changing,
+                is_highlighted=is_highlighted,
             )
 
             # 爻位标签
             position_labels = ["上爻", "五爻", "四爻", "三爻", "二爻", "初爻"]
             label = position_labels[i]
 
-            # 爻辞（使用display_gua的爻辞）
+            # 爻辞和小象传（使用display_gua的爻辞）
             yao_text = display_yao.text
+            xiang_text = display_yao.xiang
+
+            # 高亮时的样式
+            text_color = ft.Colors.RED if is_highlighted else ft.Colors.GREY_700
+            text_weight = ft.FontWeight.BOLD if is_highlighted else ft.FontWeight.NORMAL
 
             row = ft.Row(
                 [
                     # 爻位标签
                     ft.Container(
-                        content=ft.Text(
-                            label, size=16, color=ft.Colors.GREY
-                        ),  # 从12放大到16
-                        width=50,  # 从40放大到50
+                        content=ft.Text(label, size=16, color=ft.Colors.GREY),
+                        width=50,
                         alignment=ft.Alignment(1, 0),
                     ),
                     # 爻线
                     yao_line,
-                    # 爻辞
+                    # 爻辞和小象传
                     ft.Container(
-                        content=ft.Text(
-                            yao_text,
-                            size=14,  # 从11放大到14
-                            color=ft.Colors.GREY_700,
+                        content=ft.Column(
+                            [
+                                # 爻辞
+                                ft.Text(
+                                    yao_text,
+                                    size=14,
+                                    color=text_color,
+                                    weight=text_weight,
+                                ),
+                                # 小象传（如果有）
+                                ft.Text(
+                                    f"象曰：{xiang_text}" if xiang_text else "",
+                                    size=12,
+                                    color=text_color,
+                                    weight=text_weight,
+                                    italic=True,
+                                )
+                                if xiang_text
+                                else ft.Container(),
+                            ],
+                            spacing=2,
                         ),
-                        width=350,  # 从280放大到350
-                        padding=ft.Padding(
-                            left=15, top=0, right=0, bottom=0
-                        ),  # 左边距从10放大到15
+                        width=400,
+                        padding=ft.Padding(left=15, top=0, right=0, bottom=0),
                     ),
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -279,13 +344,18 @@ class InteractiveHexagramView(ft.Column):
             self.controls.append(row)
 
     def update_gua(
-        self, original_gua: Gua, changing_positions: Optional[List[int]] = None
+        self,
+        original_gua: Gua,
+        changing_positions: Optional[List[int]] = None,
+        highlighted_positions: Optional[List[int]] = None,
     ):
         """更新卦象"""
         self.original_gua = original_gua
         self.changing_positions = (
             changing_positions if changing_positions is not None else []
         )
+        if highlighted_positions is not None:
+            self.highlighted_positions = highlighted_positions
 
         # 重新计算display_gua
         if self.changing_positions:
@@ -391,6 +461,7 @@ class YijingApp:
     def __init__(self):
         self.original_gua: Gua = ALL_GUAS[0]  # 原始卦（本卦）
         self.changing_yaos: List[int] = []  # 变爻位置列表
+        self.highlighted_yaos: List[int] = []  # 高亮爻位置列表
         self.page: Optional[ft.Page] = None
 
     def main(self, page: ft.Page):
@@ -401,6 +472,10 @@ class YijingApp:
         page.padding = 20
         page.window.width = 1200
         page.window.height = 800
+
+        # 全屏模式
+        page.window.maximized = True
+        page.window.full_screen = True
 
         # 构建UI
         self._build_ui()
@@ -424,14 +499,97 @@ class YijingApp:
             alignment=ft.MainAxisAlignment.CENTER,
         )
 
-        # 搜索结果
-        self.search_results = ft.Column(scroll=ft.ScrollMode.AUTO, height=200)
+        # 数字定位搜索框（上卦、下卦、动爻）
+        self.upper_field = ft.TextField(
+            label="上卦",
+            hint_text="1-8",
+            width=80,
+            text_align=ft.TextAlign.CENTER,
+            on_submit=self._on_number_search,
+        )
+        self.lower_field = ft.TextField(
+            label="下卦",
+            hint_text="1-8",
+            width=80,
+            text_align=ft.TextAlign.CENTER,
+            on_submit=self._on_number_search,
+        )
+        self.moving_field = ft.TextField(
+            label="动爻",
+            hint_text="1-6",
+            width=80,
+            text_align=ft.TextAlign.CENTER,
+            on_submit=self._on_number_search,
+        )
+        number_search_button = ft.Button(
+            "数字定位",
+            on_click=self._on_number_search,
+        )
+
+        number_search_row = ft.Row(
+            [
+                ft.Text("数字定位:", size=14, weight=ft.FontWeight.BOLD),
+                self.upper_field,
+                self.lower_field,
+                self.moving_field,
+                number_search_button,
+                # 数字对照提示
+                ft.Text("1乾2兑3离4震5巽6坎7艮8坤", size=11, color=ft.Colors.GREY_600),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+        )
+
+        # 搜索结果 - 减小高度
+        self.search_results = ft.Column(scroll=ft.ScrollMode.AUTO, height=100)
+
+        # 高亮选择区域 - 用于选择重点突出的爻
+        self.highlight_checkboxes = []
+        # 高亮选择区域 - 用于选择重点突出的爻
+        self.highlight_checkboxes = {}
+        highlight_row = ft.Row(
+            [
+                ft.Text("标红:", size=14, weight=ft.FontWeight.BOLD),
+                # 上爻到初爻的复选框
+                ft.Checkbox(
+                    label="上",
+                    value=False,
+                    on_change=lambda e: self._on_highlight_change(6, e.control.value),
+                ),
+                ft.Checkbox(
+                    label="五",
+                    value=False,
+                    on_change=lambda e: self._on_highlight_change(5, e.control.value),
+                ),
+                ft.Checkbox(
+                    label="四",
+                    value=False,
+                    on_change=lambda e: self._on_highlight_change(4, e.control.value),
+                ),
+                ft.Checkbox(
+                    label="三",
+                    value=False,
+                    on_change=lambda e: self._on_highlight_change(3, e.control.value),
+                ),
+                ft.Checkbox(
+                    label="二",
+                    value=False,
+                    on_change=lambda e: self._on_highlight_change(2, e.control.value),
+                ),
+                ft.Checkbox(
+                    label="初",
+                    value=False,
+                    on_change=lambda e: self._on_highlight_change(1, e.control.value),
+                ),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+        )
 
         # 本卦视图（包含卦辞和爻辞，点击爻切换阴阳）
         self.hexagram_view = InteractiveHexagramView(
             original_gua=self.original_gua,
             on_yao_click=self._on_yao_click,
             title="玩索而得 - 点击爻切换阴阳",
+            highlighted_positions=self.highlighted_yaos,
         )
 
         # 卦象关系
@@ -487,16 +645,17 @@ class YijingApp:
         )
 
         # 主内容区 - 卦象居中，占据更多空间
+        # 调整比例：减小左右侧宽度，增大中间区域
         main_content = ft.ResponsiveRow(
             [
-                ft.Container(left_column, col={"sm": 12, "md": 2, "lg": 2}),
-                ft.Container(center_column, col={"sm": 12, "md": 8, "lg": 8}),
-                ft.Container(right_column, col={"sm": 12, "md": 2, "lg": 2}),
+                ft.Container(left_column, col={"sm": 12, "md": 3, "lg": 2}),
+                ft.Container(center_column, col={"sm": 12, "md": 6, "lg": 8}),
+                ft.Container(right_column, col={"sm": 12, "md": 3, "lg": 2}),
             ],
             expand=True,
         )
 
-        # 组装页面 - 搜索框放在底部
+        # 组装页面 - 搜索框放在最底部
         if self.page is not None:
             self.page.add(
                 ft.Column(
@@ -510,12 +669,28 @@ class YijingApp:
                             color=ft.Colors.GREY,
                         ),
                         ft.Divider(),
-                        main_content,
-                        ft.Divider(),
-                        search_row,
-                        self.search_results,
+                        # 主内容区域占据大部分空间
+                        ft.Container(
+                            content=main_content,
+                            expand=True,
+                        ),
+                        # 底部搜索区域 - 紧凑布局
+                        ft.Container(
+                            content=ft.Column(
+                                [
+                                    ft.Divider(),
+                                    search_row,
+                                    self.search_results,
+                                    number_search_row,
+                                    highlight_row,
+                                ],
+                                spacing=5,
+                            ),
+                            padding=ft.Padding(left=0, top=5, right=0, bottom=0),
+                        ),
                     ],
                     expand=True,
+                    spacing=0,
                 )
             )
 
@@ -561,6 +736,77 @@ class YijingApp:
 
         self.search_results.update()
 
+    def _on_number_search(self, e):
+        """处理数字定位搜索"""
+        try:
+            upper = int(self.upper_field.value) if self.upper_field.value else 0
+            lower = int(self.lower_field.value) if self.lower_field.value else 0
+            moving = int(self.moving_field.value) if self.moving_field.value else 0
+        except ValueError:
+            self.search_results.controls = [
+                ft.Text("请输入有效的数字", color=ft.Colors.RED)
+            ]
+            self.search_results.update()
+            return
+
+        # 验证输入范围
+        if not (1 <= upper <= 8) or not (1 <= lower <= 8):
+            self.search_results.controls = [
+                ft.Text("上卦和下卦数字必须在1-8之间", color=ft.Colors.RED)
+            ]
+            self.search_results.update()
+            return
+
+        # 查找卦象
+        gua = get_gua_by_numbers(upper, lower)
+
+        if not gua:
+            self.search_results.controls = [
+                ft.Text("未找到对应的卦象", color=ft.Colors.RED)
+            ]
+            self.search_results.update()
+            return
+
+        # 设置动爻（如果输入了动爻）
+        self.changing_yaos = []
+        if 1 <= moving <= 6:
+            self.changing_yaos = [moving]
+
+        # 清空高亮
+        self.highlighted_yaos = []
+
+        # 更新所有视图
+        self.original_gua = gua
+        self.hexagram_view.update_gua(gua, self.changing_yaos, [])
+        self.relations_view.update_gua(gua)
+        self._update_gua_info(
+            gua.get_changed_gua(self.changing_yaos) if self.changing_yaos else gua
+        )
+
+        # 显示结果提示
+        trigram_names = {
+            "qian": "乾",
+            "kun": "坤",
+            "zhen": "震",
+            "gen": "艮",
+            "kan": "坎",
+            "li": "离",
+            "xun": "巽",
+            "dui": "兑",
+        }
+        upper_name = trigram_names.get(gua.upper_gua, "")
+        lower_name = trigram_names.get(gua.lower_gua, "")
+
+        moving_text = f" · 动爻：第{moving}爻" if 1 <= moving <= 6 else ""
+        self.search_results.controls = [
+            ft.ListTile(
+                title=ft.Text(f"{gua.name} ({upper_name}{lower_name}{gua.name})"),
+                subtitle=ft.Text(f"数字定位：上卦{upper} · 下卦{lower}{moving_text}"),
+                selected=True,
+            )
+        ]
+        self.search_results.update()
+
     def _on_yao_click(self, yao: Yao):
         """处理爻点击 - 切换变爻状态"""
         if yao.position in self.changing_yaos:
@@ -569,7 +815,9 @@ class YijingApp:
             self.changing_yaos.append(yao.position)
 
         # 更新本卦视图（显示变化后的样子、卦辞、卦名、爻辞）
-        self.hexagram_view.update_gua(self.original_gua, self.changing_yaos)
+        self.hexagram_view.update_gua(
+            self.original_gua, self.changing_yaos, self.highlighted_yaos
+        )
 
         # 更新卦辞详解
         if self.changing_yaos:
@@ -593,9 +841,10 @@ class YijingApp:
         """处理卦象选择"""
         self.original_gua = gua
         self.changing_yaos = []
+        self.highlighted_yaos = []
 
         # 更新所有视图
-        self.hexagram_view.update_gua(gua, [])
+        self.hexagram_view.update_gua(gua, [], [])
         self.relations_view.update_gua(gua)
 
         # 更新卦辞信息
@@ -604,6 +853,20 @@ class YijingApp:
         # 清空搜索结果
         self.search_results.controls = []
         self.search_results.update()
+
+    def _on_highlight_change(self, position: int, is_checked: bool):
+        """处理高亮选择变化"""
+        if is_checked:
+            if position not in self.highlighted_yaos:
+                self.highlighted_yaos.append(position)
+        else:
+            if position in self.highlighted_yaos:
+                self.highlighted_yaos.remove(position)
+
+        # 更新视图，传递高亮位置
+        self.hexagram_view.update_gua(
+            self.original_gua, self.changing_yaos, self.highlighted_yaos
+        )
 
 
 def main():

@@ -123,6 +123,18 @@ class Gua:
         return binary_to_gua(binary)
 
 
+# 数字到八卦的映射（用于数字定位）
+NUMBER_TO_TRIGRAM = {
+    1: "qian",  # 乾
+    2: "dui",  # 兑
+    3: "li",  # 离
+    4: "zhen",  # 震
+    5: "xun",  # 巽
+    6: "kan",  # 坎
+    7: "gen",  # 艮
+    8: "kun",  # 坤
+}
+
 # 八卦定义
 TRIGRAMS = {
     "qian": {
@@ -533,13 +545,21 @@ def search_gua(query: str) -> List[Gua]:
         init_data()
 
     query = query.lower().strip()
+    # 去掉"卦"字后缀，方便搜索"夬卦"也能找到"夬"
+    query_without_gua = query.rstrip("卦")
     results = []
 
     for gua in ALL_GUAS:
-        # 搜索卦名
+        # 搜索卦名（支持"夬"和"夬卦"）
         if query in gua.name or query in gua.chinese_name:
             results.append(gua)
             continue
+
+        # 去掉"卦"字后的搜索
+        if query_without_gua and query_without_gua != query:
+            if query_without_gua in gua.name or query_without_gua in gua.chinese_name:
+                results.append(gua)
+                continue
 
         # 搜索简称（如"水天"）
         for short_name in gua.short_names:
@@ -556,6 +576,34 @@ def get_gua_by_index(index: int) -> Optional[Gua]:
         init_data()
     if 1 <= index <= 64:
         return ALL_GUAS[index - 1]
+    return None
+
+
+def get_gua_by_numbers(upper_num: int, lower_num: int) -> Optional[Gua]:
+    """根据上下卦数字查找卦象
+
+    Args:
+        upper_num: 上卦数字 (1-8)
+        lower_num: 下卦数字 (1-8)
+
+    Returns:
+        匹配的卦象，未找到返回None
+    """
+    if not ALL_GUAS:
+        init_data()
+
+    # 验证输入
+    if upper_num not in NUMBER_TO_TRIGRAM or lower_num not in NUMBER_TO_TRIGRAM:
+        return None
+
+    upper_trigram = NUMBER_TO_TRIGRAM[upper_num]
+    lower_trigram = NUMBER_TO_TRIGRAM[lower_num]
+
+    # 查找匹配的卦
+    for gua in ALL_GUAS:
+        if gua.upper_gua == upper_trigram and gua.lower_gua == lower_trigram:
+            return gua
+
     return None
 
 
